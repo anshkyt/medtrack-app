@@ -8,7 +8,7 @@ import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 print("=" * 80)
-print("APP IS STARTING - MEDTRACK BACKEND")
+print("app starting")
 print("=" * 80)
 
 app = Flask(__name__)
@@ -24,7 +24,7 @@ jwt = JWTManager(app)
 @jwt.invalid_token_loader
 def invalid_token_callback(error):
     print("=" * 50)
-    print("INVALID TOKEN ERROR:", error)
+    print("Token not valid,", error)
     print("=" * 50)
     return jsonify({'error': 'Invalid token'}), 422
 
@@ -36,7 +36,7 @@ def unauthorized_callback(error):
     return jsonify({'error': 'Missing Authorization header'}), 422
 scheduler = BackgroundScheduler()
 
-# Database Models
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -51,8 +51,8 @@ class Medication(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(200), nullable=False)
     dosage = db.Column(db.String(100), nullable=False)
-    frequency = db.Column(db.String(50), nullable=False)  # daily, twice_daily, weekly, etc.
-    time_of_day = db.Column(db.JSON)  # ['08:00', '20:00'] for multiple times
+    frequency = db.Column(db.String(50), nullable=False)  
+    time_of_day = db.Column(db.JSON)  
     start_date = db.Column(db.DateTime, nullable=False)
     end_date = db.Column(db.DateTime)
     notes = db.Column(db.Text)
@@ -65,7 +65,7 @@ class AdherenceLog(db.Model):
     medication_id = db.Column(db.Integer, db.ForeignKey('medication.id'), nullable=False)
     scheduled_time = db.Column(db.DateTime, nullable=False)
     taken_time = db.Column(db.DateTime)
-    status = db.Column(db.String(20), nullable=False)  # taken, missed, skipped
+    status = db.Column(db.String(20), nullable=False)  
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class DrugInteraction(db.Model):
@@ -76,7 +76,7 @@ class DrugInteraction(db.Model):
     description = db.Column(db.Text)
     cached_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# Authentication Routes
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -130,7 +130,7 @@ def login():
         }
     }), 200
 
-# Medication Routes
+
 @app.route('/api/medications', methods=['GET'])
 @jwt_required()
 def get_medications():
@@ -160,7 +160,6 @@ def add_medication():
         print("USER ID:", user_id)
         print("=" * 50)
         
-        # Handle empty end_date
         end_date_value = None
         if data.get('end_date') and data['end_date'].strip():
             end_date_value = datetime.fromisoformat(data['end_date'])
@@ -233,7 +232,6 @@ def delete_medication(med_id):
     
     return jsonify({'message': 'Medication deleted successfully'}), 200
 
-# Drug Interaction Checker
 @app.route('/api/interactions/check', methods=['POST'])
 @jwt_required()
 def check_interactions():
@@ -245,13 +243,11 @@ def check_interactions():
     
     interactions = []
     
-    # Check OpenFDA API for drug interactions
     for i in range(len(medications)):
         for j in range(i + 1, len(medications)):
             drug1 = medications[i].lower()
             drug2 = medications[j].lower()
             
-            # Check cache first
             cached = DrugInteraction.query.filter(
                 ((DrugInteraction.drug1 == drug1) & (DrugInteraction.drug2 == drug2)) |
                 ((DrugInteraction.drug1 == drug2) & (DrugInteraction.drug2 == drug1))
@@ -265,7 +261,6 @@ def check_interactions():
                     'description': cached.description
                 })
             else:
-                # Query OpenFDA API
                 try:
                     url = f"https://api.fda.gov/drug/label.json?search=openfda.brand_name:{drug1}+AND+drug_interactions:{drug2}&limit=1"
                     response = requests.get(url, timeout=5)
@@ -290,7 +285,7 @@ def check_interactions():
                                 }
                                 interactions.append(interaction)
                                 
-                                # Cache the result
+                         
                                 new_interaction = DrugInteraction(
                                     drug1=drug1,
                                     drug2=drug2,
@@ -304,7 +299,7 @@ def check_interactions():
     
     return jsonify({'interactions': interactions}), 200
 
-# Adherence Logging
+
 @app.route('/api/adherence/log', methods=['POST'])
 @jwt_required()
 def log_adherence():
@@ -344,7 +339,7 @@ def get_adherence_stats():
     
     adherence_rate = (taken / total * 100) if total > 0 else 0
     
-    # Daily adherence breakdown
+ 
     daily_stats = {}
     for log in logs:
         date_key = log.scheduled_time.strftime('%Y-%m-%d')
@@ -361,16 +356,15 @@ def get_adherence_stats():
         'daily_stats': daily_stats
     }), 200
 
-# Dashboard Summary
+
 @app.route('/api/dashboard', methods=['GET'])
 @jwt_required()
 def get_dashboard():
     user_id = get_jwt_identity()
     
-    # Get active medications count
+  
     active_meds = Medication.query.filter_by(user_id=user_id, active=True).count()
     
-    # Get today's adherence
     today = datetime.utcnow().date()
     today_logs = AdherenceLog.query.filter(
         AdherenceLog.user_id == user_id,
@@ -380,7 +374,6 @@ def get_dashboard():
     today_taken = sum(1 for log in today_logs if log.status == 'taken')
     today_total = len(today_logs)
     
-    # Get upcoming doses (next 24 hours)
     medications = Medication.query.filter_by(user_id=user_id, active=True).all()
     upcoming = []
     
@@ -408,7 +401,6 @@ def get_dashboard():
         'upcoming_doses': upcoming[:5]
     }), 200
 
-# Initialize database
 with app.app_context():
     db.create_all()
 
